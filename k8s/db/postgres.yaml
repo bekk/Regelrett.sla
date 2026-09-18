@@ -1,7 +1,8 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: service-rr-postgres
+  name: service-regelrett-postgres
+  namespace: ns-regelrett-db
   labels:
     app.kubernetes.io/name: postgres
 spec:
@@ -16,11 +17,12 @@ spec:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: statefulset-postgres
+  name: statefulset-regelrett-postgres
+  namespace: ns-regelrett-db
   labels:
     app.kubernetes.io/name: postgres
 spec:
-  serviceName: service-rr-postgres
+  serviceName: service-regelrett-postgres
   replicas: 1
   selector:
     matchLabels:
@@ -50,9 +52,16 @@ spec:
           env:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: trust
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: secret-regelrett-db
+                  key: POSTGRES_PASSWORD
           envFrom:
             - secretRef:
-                name: secret-postgres
+                name: secret-regelrett-db
           resources:
             requests:
               cpu: 500m

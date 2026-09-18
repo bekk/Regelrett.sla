@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-postgres-initdb
+  namespace: ns-regelrett-db
+  labels:
+    app.kubernetes.io/part-of: postgres
+data:
+  01-init-regelrett-db.sql: |
+    \getenv rr_pwd APP_DB_PASSWORD
+    
+    CREATE ROLE regelrett LOGIN PASSWORD :'rr_pwd';
+    CREATE DATABASE regelrett OWNER regelrett;
+
+    REVOKE CONNECT ON DATABASE regelrett FROM PUBLIC;
