@@ -54,3 +54,5 @@ out/
 .kotlin
 kls_database.db
 
+## Env
+postgres.env
