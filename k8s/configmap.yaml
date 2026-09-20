@@ -3,4 +3,3 @@ kind: ConfigMap
 metadata:
   name: config-regelrett
   namespace: ns-regelrett
-data:

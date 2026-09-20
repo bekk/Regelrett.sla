@@ -36,6 +36,8 @@ spec:
                 name: config-regelrett
             - secretRef:
                 name: secret-regelrett-db
+            - secretRef:
+                name: secret-regelrett-oauth
           resources:
             requests:
               cpu: 500m
