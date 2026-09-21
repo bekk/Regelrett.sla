@@ -56,3 +56,6 @@ kls_database.db
 
 ## Env
 postgres.env
+oauth-secrets.env
+k8s/secrets/*.env
+!k8s/secrets/*.env.example

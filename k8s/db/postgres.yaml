@@ -57,11 +57,11 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: secret-regelrett-db
+                  name: secret-regelrett-postgres
                   key: POSTGRES_PASSWORD
           envFrom:
             - secretRef:
-                name: secret-regelrett-db
+                name: secret-regelrett-postgres
           resources:
             requests:
               cpu: 500m
