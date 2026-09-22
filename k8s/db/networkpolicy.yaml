@@ -33,7 +33,7 @@ spec:
               kubernetes.io/metadata.name: ns-regelrett
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: regelrett
+              app.kubernetes.io/name: spire-regelrett
       ports:
         - protocol: TCP
           port: 5432
