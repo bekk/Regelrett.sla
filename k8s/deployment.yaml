@@ -54,6 +54,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: schemasources
+              mountPath: /etc/regelrett/provisioning/schemasources
+              readOnly: true
           startupProbe:
             httpGet:
               path: /health
@@ -76,3 +79,6 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: schemasources
+          secret:
+            secretName: secret-regelrett-schemasources
