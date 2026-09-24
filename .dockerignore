@@ -1,1 +1,10 @@
 node_modules
+.git
+.github
+.gradle
+.idea
+k8s
+*.md
+compose.yaml
+gcp-config.yaml
+catalog-info.yaml

@@ -28,7 +28,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: spire-regelrett
-          image: europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett:20260922-1047-9a18c4e
+          # Erstattes ved deploy. Se .github/README.md.
+          image: replaced-at-deploy
           ports:
             - name: http
               containerPort: 8080

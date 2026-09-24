@@ -2,6 +2,9 @@
 
 Rene manifester, applyet med `kubectl apply -f`. Ingen kustomize, ingen Helm.
 
+**Merge til `main` deployer appen automatisk.** Kommandoene under er engangsoppsettet og
+feilsøkingsveien — se [.github/README.md](../.github/README.md) for CI-flyten.
+
 Alt utenom Secrets ligger som YAML her. Secrets lages med `kubectl` fra env-filer
 som er gitignorert — se [Secrets](#secrets) under.
 
@@ -98,11 +101,17 @@ kubectl apply -f k8s/db/configmap-initdb.yaml -f k8s/db/postgres.yaml -f k8s/db/
 kubectl rollout status statefulset/statefulset-regelrett-postgres -n ns-regelrett-db --timeout=5m
 ```
 
-Så appen:
+Så appen. Normalt gjør GitHub Actions dette ved merge til `main` — se
+[.github/README.md](../.github/README.md). For hånd, med plassholderen byttet ut:
 
 ```bash
-kubectl apply -f k8s/configmap.yaml -f k8s/service.yaml -f k8s/deployment.yaml -f k8s/networkpolicy.yaml
+IMG=europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett:<tag>
+awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/*.yaml \
+  | sed "s|replaced-at-deploy|$IMG|g" \
+  | kubectl apply -f -
 ```
+
+Deployer du slik mens CI er i bruk, blir det du la ut overskrevet av neste merge.
 
 ### Image
 
@@ -146,9 +155,18 @@ Sjekk arkitekturen til et image før du deployer det:
 docker buildx imagetools inspect "$IMG" --format '{{.Image.Platform}}'
 ```
 
-Taggen som står i `deployment.yaml` er den som sist ble applyet for hånd. GitOps-flyten i
-`.github/workflows/build-deploy.yml` skriver image-URL-en til repoet `kartverket/skvis-apps`,
-og oppdaterer ikke denne fila.
+`deployment.yaml` inneholder ikke en tag, men plassholderen `replaced-at-deploy`. Deployen
+bytter den ut med gjeldende image:
+
+```bash
+awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/*.yaml \
+  | sed "s|replaced-at-deploy|$IMG|g" \
+  | kubectl apply -f -
+```
+
+Et bart `kubectl apply -f k8s/deployment.yaml` vil derfor feile på plassholderen. Det er
+med vilje: alternativet var at manifestet inneholdt en tag som stille ble eldre for hver
+deploy, og at en apply for hånd rullet klyngen tilbake uten at noen merket det.
 
 ### Nå appen
 

@@ -1,1 +1,35 @@
-# Empty for now 
+# Innstillinger for Regelrett i Google Cloud.
+#
+# Rene konfigurasjonsverdier. Leses av workflowene i .github/workflows/ med yq,
+# slik at navn ikke hardkodes i YAML-en der. Se .github/README.md.
+
+app: spire-regelrett
+
+gcp:
+  project_id: gcp-fleks-grafanaslo
+  region: europe-north1
+  # Artifact Registry-repoet ble laget for spire-grafana-slo. Regelrett deler
+  # det, så repo-navnet er ikke det samme som app-navnet.
+  repo: spire-grafana-slo
+  # GKE Autopilot-klyngen deles med spire-grafana-slo.
+  cluster: spire-grafana-slo
+  latest_tag: latest
+
+# GKE-nodene er linux/amd64. Bygges imaget uten dette på en Apple Silicon-Mac,
+# krasjer podden med «exec format error».
+build:
+  platform: linux/amd64
+  dockerfile: Dockerfile
+  context: .
+
+kubernetes:
+  # Manifestene CI deployer ligger rett under k8s/. Databasen i k8s/db/ har
+  # egen livssyklus og deployes ikke herfra.
+  dir: k8s
+  namespace: ns-regelrett
+  deployment: deployment-regelrett
+  # Plassholderen i deployment.yaml som byttes ut med gjeldende image.
+  image_placeholder: replaced-at-deploy
+
+timeouts:
+  rollout: 5m
