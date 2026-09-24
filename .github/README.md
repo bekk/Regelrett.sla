@@ -1,6 +1,6 @@
 # CI/CD
 
-Merge til `main` deployer Regelrett til GCP. Ingenting annet gjør det.
+Enhver push til `main` deployer Regelrett til GCP.
 
 Klyngen, databasen og Secretene står i [k8s/README.md](../k8s/README.md). Denne filen
 dekker bare det GitHub Actions gjør.
@@ -15,7 +15,7 @@ dekker bare det GitHub Actions gjør.
 
 `build` er required status check på `main`. PR-en kan ikke merges før den er grønn.
 
-Image-taggen er de sju første tegnene av commitens SHA. Det avløser
+Image-taggen er en kortere versjon av commitens SHA. Det avløser
 `<dato>-<tid>-<sha>`-formatet som ble brukt ved manuell deploy, slik at hver tag peker
 entydig på én commit.
 
