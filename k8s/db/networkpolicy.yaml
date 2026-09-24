@@ -1,0 +1,39 @@
+# Default deny for innkommende trafikk i database-namespacet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netpol-default-deny-ingress
+  namespace: ns-regelrett-db
+  labels:
+    app.kubernetes.io/part-of: postgres
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# "namespaceSelector" og "podSelector" står i samme "from" listeelement, og da gjelder
+# begge samtidig – altså pods med den labelen i det namespacet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netpol-allow-regelrett-to-postgres
+  namespace: ns-regelrett-db
+  labels:
+    app.kubernetes.io/part-of: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ns-regelrett
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: spire-regelrett
+      ports:
+        - protocol: TCP
+          port: 5432

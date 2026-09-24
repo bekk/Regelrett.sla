@@ -1,0 +1,22 @@
+# Ikke-hemmelig konfigurasjon som miljøvariabler på app-podden.
+# Navngivning og begrensninger: se «Deploy» i k8s/README.md og conf/README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-regelrett
+  namespace: ns-regelrett
+  labels:
+    app.kubernetes.io/part-of: regelrett
+data:
+  RR_BASE_MODE: "production"
+
+  # Bestemmer redirect-URI-en mot Entra («${root_url}/callback»).
+  # Denne verdien passer til kubectl port-forward.
+  RR_SERVER_ROOT_URL: "http://localhost:8080"
+  RR_SERVER_DOMAIN: "localhost"
+  RR_SERVER_ALLOWED_ORIGINS: "localhost:8080,localhost:5173"
+
+  # Headless Service i databasens namespace. Uten denne brukes
+  # defaults.yaml sin 127.0.0.1:5433. Bruker og passord: secret-regelrett-db.
+  RR_DATABASE_HOST: "service-regelrett-postgres.ns-regelrett-db.svc.cluster.local:5432"
+  RR_DATABASE_NAME: "regelrett"
