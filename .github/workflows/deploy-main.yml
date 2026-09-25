@@ -3,10 +3,7 @@ name: Deploy til GCP
 
 on:
   push:
-    # Legg til en testbranch her midlertidig for å kjøre deployen før merge.
     branches: [main]
-    # Rene dokumentasjonsendringer skal ikke rulle podene. Hopper bare over
-    # når alt som er endret er markdown – ligger det kode i samme commit, kjører den.
     paths-ignore:
       - '**/*.md'
   workflow_dispatch:
@@ -26,7 +23,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Kjører også når noen pusher rett i main, og deployen venter på den.
+  # Alle deploys må ha grønne tester i forkant. Se "needs: test" i jobs.deploy.
   test:
     uses: ./.github/workflows/test.yml
 
@@ -77,7 +74,7 @@ jobs:
         with:
           install_components: gke-gcloud-auth-plugin
 
-      # Pinnet så kubectl ikke endrer seg med runner-imaget.
+      # Pinner kubectl versjon så den ikke endrer seg med runner-imaget.
       # Bump bevisst, og ikke under det utviklerne kjører lokalt.
       - uses: azure/setup-kubectl@v5
         with:
