@@ -15,6 +15,11 @@ dekker bare det GitHub Actions gjør.
 
 `build` er required status check på `main`. PR-en kan ikke merges før den er grønn.
 
+Deployen hopper over rene dokumentasjonsendringer (`paths-ignore: '**/*.md'`). Ligger det
+kode i samme commit, kjører den som vanlig. `pr-build.yml` har bevisst **ingen**
+`paths-ignore`: en required status check som hoppes over rapporterer aldri, og PR-en blir
+stående i «Expected — Waiting for status» for alltid.
+
 Image-taggen er en kortere versjon av commitens SHA. Det avløser
 `<dato>-<tid>-<sha>`-formatet som ble brukt ved manuell deploy, slik at hver tag peker
 entydig på én commit.

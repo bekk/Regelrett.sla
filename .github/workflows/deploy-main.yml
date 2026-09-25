@@ -5,6 +5,10 @@ on:
   push:
     # Legg til en testbranch her midlertidig for å kjøre deployen før merge.
     branches: [main]
+    # Rene dokumentasjonsendringer skal ikke rulle podene. Hopper bare over
+    # når alt som er endret er markdown – ligger det kode i samme commit, kjører den.
+    paths-ignore:
+      - '**/*.md'
   workflow_dispatch:
     inputs:
       tag:
