@@ -16,7 +16,7 @@ som er gitignorert — se [Secrets](#secrets) under.
 | `configmap.yaml` | ConfigMap `config-regelrett` | `ns-regelrett` |
 | `deployment.yaml` | Deployment `deployment-regelrett` | `ns-regelrett` |
 | `service.yaml` | Service `service-regelrett` | `ns-regelrett` |
-| `networkpolicy.yaml` | NetworkPolicy `netpol-default-deny-ingress` | `ns-regelrett` |
+| `networkpolicy.yaml` | NetworkPolicy default-deny + allow fra Backstage | `ns-regelrett` |
 | `db/namespace.yaml` | Namespace `ns-regelrett-db` | – |
 | `db/configmap-initdb.yaml` | ConfigMap `config-postgres-initdb` | `ns-regelrett-db` |
 | `db/postgres.yaml` | Service + StatefulSet | `ns-regelrett-db` |
@@ -200,6 +200,19 @@ ALTER ROLE regelrett WITH PASSWORD 'nytt-passord';
 ```
 
 Skjemaendringer kjøres av Flyway ved oppstart, fra `src/main/resources/db/migration`.
+
+## NetworkPolicy
+
+`networkpolicy.yaml` inneholder to policyer i `ns-regelrett`: default-deny på all ingress,
+pluss `netpol-allow-backstage-to-regelrett` som slipper inn Backstage-poddene
+(`app.kubernetes.io/name: backstage` i `ns-backstage`) på appens **pod-port**, 8080 — ikke
+Service-porten 80. Trafikk NAT'es til pod-porten før NetworkPolicy evalueres, så en regel
+som peker på port 80 ser riktig ut, men matcher ingenting.
+
+Regelen matcher på podLabelen `app.kubernetes.io/name: spire-regelrett`, samme fallgruve som
+beskrevet under [Kjent svakhet](#kjent-svakhet) for databasens NetworkPolicy: endres labelen
+i `deployment.yaml` uten at `networkpolicy.yaml` endres i samme slengen, blir
+Backstage-trafikken droppet av default-deny.
 
 ## Kjent svakhet
 

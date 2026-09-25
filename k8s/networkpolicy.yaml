@@ -9,3 +9,28 @@ spec:
   podSelector: {}
   policyTypes:
     - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netpol-allow-backstage-to-regelrett
+  namespace: ns-regelrett
+  labels:
+    app.kubernetes.io/part-of: regelrett
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: spire-regelrett
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ns-backstage
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backstage
+      ports:
+        - protocol: TCP
+          port: 8080
