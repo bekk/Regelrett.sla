@@ -22,13 +22,11 @@ som er gitignorert — se [Secrets](#secrets) under.
 | `db/postgres.yaml` | Service + StatefulSet | `ns-regelrett-db` |
 | `db/networkpolicy.yaml` | NetworkPolicy default-deny + allow fra appen | `ns-regelrett-db` |
 
-Databasen bor i et eget namespace med vilje. Rives appen — `kubectl delete namespace
-ns-regelrett` er den korteste veien — følger ikke dataene med.
+Databasen bor i et eget namespace. Rives appen — `kubectl delete namespacens-regelrett` er den korteste veien — følger ikke dataene med.
 
 ## Secrets
 
-Tre Secrets må finnes før poddene starter. Uten dem blir de stående i
-`CreateContainerConfigError`.
+Tre Secrets må finnes før poddene starter. Uten dem blir de stående i `CreateContainerConfigError`.
 
 Databasen og appen har hver sin Secret: databasen trenger superbrukerpassordet, appen
 trenger bare sin egen innlogging.
