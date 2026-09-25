@@ -17,8 +17,8 @@ Testene ligger i [`test.yml`](workflows/test.yml) som en gjenbrukbar workflow, o
 begge. Det er med vilje: **også en direkte push til `main` kjører testene**, og deployen
 venter på dem gjennom `needs: test`. Feiler en test, når koden aldri klyngen.
 
-Det er den sperren som gjør at repoet klarer seg uten ruleset. `main` kan inneholde en
-brist – men klyngen får den ikke.
+Det er den sperren som gjør at repoet klarer seg uten krav om pull request. `main` kan
+inneholde en brist – men klyngen får den ikke.
 
 Testene er `./gradlew test` (Kotlin, med Testcontainers), `pnpm test` (vitest) og en
 validering av manifestene. Docker-bygget ligger utenfor: i PR-en som en ren
@@ -149,6 +149,42 @@ kubectl -n ns-regelrett rollout undo deployment/deployment-regelrett
 
 Raskest, men klyngen er nå ute av takt med `main`, og neste merge overskriver den stille.
 Følg alltid opp med vei 1.
+
+## Regler på `main`
+
+[`ruleset.json`](ruleset.json) er definisjonen, og den speiler det som faktisk gjelder:
+
+| Regel | Gjør |
+| --- | --- |
+| `non_fast_forward` | Ingen force-push |
+| `deletion` | `main` kan ikke slettes |
+
+**Ingen krav om pull request og ingen required checks.** PR og code review er etablert
+praksis i teamet, ikke noe GitHub tvinger fram. Testene kjører uansett hvilken vei en
+endring tar, og deployen venter på dem – så klyngen er dekket av `needs: test`, ikke av
+reglene. Reglene dekker det testene ikke kan: at historikken ikke forsvinner ved et uhell.
+
+Filen er ikke koblet til GitHub automatisk. Endrer du reglene, må begge oppdateres:
+
+```bash
+# Les ut det som gjelder nå
+gh api repos/bekk/Regelrett.sla/rulesets/<id> --jq '{name, target, enforcement, conditions, rules}'
+
+# Legg inn på nytt fra filen
+gh api repos/bekk/Regelrett.sla/rulesets/<id> --method PUT --input .github/ruleset.json
+```
+
+Et nytt ruleset opprettes med `--method POST` mot `repos/<eier>/<repo>/rulesets`, eller ved
+å importere filen under Settings → Rules → Rulesets.
+
+### Hva som er verifisert
+
+`non_fast_forward` og `deletion` er **ikke** prøvd mot et ekte forsøk. At de gjelder for
+`main` er bekreftet gjennom `gh api repos/<eier>/<repo>/rules/branches/main`, som er
+GitHubs egen evaluering – men det er ikke det samme som å ha sett en regel avvise noe.
+
+En ekte test av `non_fast_forward` krever en push som omskriver historikk. Virker regelen
+ikke, mister `main` en commit og deployen fyrer på feil versjon.
 
 ## Hva CI ikke gjør
 
