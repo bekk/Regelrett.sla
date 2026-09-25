@@ -14,37 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   build:
     name: build
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      # Testene bruker Testcontainers, som trenger Docker på runneren.
-      - name: Kotlin-tester
-        run: ./gradlew test
-
-      # Må stå før setup-node: cache-oppslaget trenger pnpm på PATH.
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: JS-tester
-        run: pnpm test
 
       - uses: docker/setup-buildx-action@v4
 
@@ -59,26 +39,3 @@ jobs:
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # Fanger en ødelagt manifest i PR-en i stedet for i deployen.
-      - name: Valider manifestene
-        run: |
-          set -euo pipefail
-          plassholder=$(yq -r '.kubernetes.image_placeholder' gcp-config.yaml)
-
-          rendret=$(awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/*.yaml \
-            | sed "s|${plassholder}|attrapp/image:v0|g")
-
-          printf '%s\n' "$rendret" | yq -e '.' > /dev/null
-          awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/db/*.yaml | yq -e '.' > /dev/null
-
-          if printf '%s\n' "$rendret" | grep -q "$plassholder"; then
-            echo "Plassholderen ble ikke byttet ut." >&2
-            exit 1
-          fi
-
-          # Manifestene må fortsatt inneholde det deployen venter seg.
-          for kind in Namespace ConfigMap Service Deployment NetworkPolicy; do
-            printf '%s\n' "$rendret" | yq -e "select(.kind == \"$kind\") | .metadata.name" > /dev/null \
-              || { echo "Mangler $kind i k8s/." >&2; exit 1; }
-          done

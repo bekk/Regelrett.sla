@@ -7,22 +7,34 @@ dekker bare det GitHub Actions gjør.
 
 ## Hva som skjer når
 
-| Hendelse | Workflow | Jobb | Gjør |
+| Hendelse | Workflow | Jobber | Gjør |
 | --- | --- | --- | --- |
-| Pull request mot `main` | [`pr-build.yml`](workflows/pr-build.yml) | `build` | `./gradlew test`, `pnpm test`, bygger imaget uten å publisere det, og validerer manifestene |
-| Push til `main` | [`deploy-main.yml`](workflows/deploy-main.yml) | `deploy` | Bygger og publiserer imaget, og deployer `k8s/*.yaml` til `ns-regelrett` |
-| `workflow_dispatch` med `tag` | [`deploy-main.yml`](workflows/deploy-main.yml) | `deploy` | Deployer en tag som alt er publisert, uten å bygge |
+| Pull request mot `main` | [`pr-build.yml`](workflows/pr-build.yml) | `test` → `build` | Tester, så bygger imaget uten å publisere det |
+| Push til `main` | [`deploy-main.yml`](workflows/deploy-main.yml) | `test` → `deploy` | Tester, så bygger, publiserer og deployer til `ns-regelrett` |
+| `workflow_dispatch` med `tag` | [`deploy-main.yml`](workflows/deploy-main.yml) | `test` → `deploy` | Deployer en tag som alt er publisert, uten å bygge |
 
-`build` er required status check på `main`. PR-en kan ikke merges før den er grønn.
+Testene ligger i [`test.yml`](workflows/test.yml) som en gjenbrukbar workflow, og kalles av
+begge. Det er med vilje: **også en direkte push til `main` kjører testene**, og deployen
+venter på dem gjennom `needs: test`. Feiler en test, når koden aldri klyngen.
 
-Deployen hopper over rene dokumentasjonsendringer (`paths-ignore: '**/*.md'`). Ligger det
-kode i samme commit, kjører den som vanlig. `pr-build.yml` har bevisst **ingen**
-`paths-ignore`: en required status check som hoppes over rapporterer aldri, og PR-en blir
-stående i «Expected — Waiting for status» for alltid.
+Det er den sperren som gjør at repoet klarer seg uten ruleset. `main` kan inneholde en
+brist – men klyngen får den ikke.
 
-Image-taggen er en kortere versjon av commitens SHA. Det avløser
+Testene er `./gradlew test` (Kotlin, med Testcontainers), `pnpm test` (vitest) og en
+validering av manifestene. Docker-bygget ligger utenfor: i PR-en som en ren
+kompileringssjekk uten push, og i deployen som det ekte bygget.
+
+Image-taggen er de sju første tegnene av commitens SHA. Det avløser
 `<dato>-<tid>-<sha>`-formatet som ble brukt ved manuell deploy, slik at hver tag peker
 entydig på én commit.
+
+Deployen hopper over rene dokumentasjonsendringer (`paths-ignore: '**/*.md'`). Ligger det
+kode i samme commit, kjører den som vanlig. `pr-build.yml` har bevisst ikke det samme:
+skulle dere senere sette `build` som required check, ville en hoppet-over sjekk aldri
+rapportere, og PR-en blitt stående i «Expected — Waiting for status» for alltid.
+
+`id-token: write` står bare på `deploy`-jobben, ikke på workflowen. Testjobben kan dermed
+ikke hente et GCP-token, selv om den kjører i samme fil.
 
 ## Ingen kustomize
 

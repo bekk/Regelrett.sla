@@ -18,8 +18,6 @@ on:
 
 permissions:
   contents: read
-  # Kreves av google-github-actions/auth@v3.
-  id-token: write
 
 # Ett miljø, én deploy om gangen. cancel-in-progress må være false: å avbryte
 # midt i «kubectl apply» ville etterlatt klyngen halvveis deployet.
@@ -28,10 +26,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Kjører også når noen pusher rett i main, og deployen venter på den.
+  test:
+    uses: ./.github/workflows/test.yml
+
   deploy:
     name: deploy
+    needs: test
     runs-on: ubuntu-latest
     environment: gcp-regelrett-poc
+    permissions:
+      contents: read
+      # Kreves av google-github-actions/auth@v3.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
 
