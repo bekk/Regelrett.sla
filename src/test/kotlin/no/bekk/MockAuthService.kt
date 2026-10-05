@@ -11,6 +11,7 @@ interface MockAuthService : AuthService {
     override suspend fun getUserByUserId(call: ApplicationCall, userId: String): MicrosoftGraphUser = TODO("Not yet implemented")
     override suspend fun searchUsers(call: ApplicationCall, usernameQuery: String, limit: Int): List<MicrosoftGraphUser> = TODO("Not yet implemented")
     override suspend fun hasTeamAccess(call: ApplicationCall, teamId: String?): Boolean = TODO("Not yet implemented")
+    override fun hasAppReadAccess(call: ApplicationCall): Boolean = false
     override suspend fun hasContextAccess(call: ApplicationCall, contextId: String): Boolean = TODO("Not yet implemented")
     override suspend fun hasWriteContextAccess(call: ApplicationCall, contextId: String): Boolean = TODO("Not yet implemented")
     override suspend fun hasReadContextAccess(call: ApplicationCall, contextId: String): Boolean = TODO("Not yet implemented")

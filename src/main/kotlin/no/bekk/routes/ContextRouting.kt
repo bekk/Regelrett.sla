@@ -68,7 +68,7 @@ fun Route.contextRouting(
             val formId = call.request.queryParameters["formId"]
             val includeMetrics = call.request.queryParameters["includeMetrics"] == "true"
             logger.info("Received GET /contexts with teamId $teamId with formId $formId (includeMetrics=$includeMetrics)")
-            if (!authService.hasTeamAccess(call, teamId)) {
+            if (!authService.hasAppReadAccess(call) && !authService.hasTeamAccess(call, teamId)) {
                 call.respond(HttpStatusCode.Forbidden)
                 return@get
             }

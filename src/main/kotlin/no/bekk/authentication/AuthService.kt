@@ -1,5 +1,7 @@
 package no.bekk.authentication
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
 import no.bekk.configuration.OAuthConfig
 import no.bekk.database.ContextRepository
 import no.bekk.database.ReadGrantRepository
@@ -18,6 +20,8 @@ interface AuthService {
     suspend fun searchUsers(call: ApplicationCall, usernameQuery: String, limit: Int = 10): List<MicrosoftGraphUser>
 
     suspend fun hasTeamAccess(call: ApplicationCall, teamId: String?): Boolean
+
+    fun hasAppReadAccess(call: ApplicationCall): Boolean
 
     suspend fun hasContextAccess(call: ApplicationCall, contextId: String): Boolean
 
@@ -41,6 +45,22 @@ class AuthServiceImpl(
     private val oAuthConfig: OAuthConfig,
 ) : AuthService {
     private val logger = LoggerFactory.getLogger(AuthServiceImpl::class.java)
+
+    private fun ApplicationCall.isAppOnlyToken(): Boolean {
+        val scp = principal<JWTPrincipal>()?.payload?.getClaim("scp")?.asString()
+        return scp.isNullOrBlank()
+    }
+
+    override fun hasAppReadAccess(call: ApplicationCall): Boolean {
+        if (!call.isAppOnlyToken()) return false
+
+        val roles = call.principal<JWTPrincipal>()?.payload
+            ?.getClaim("roles")?.asList(String::class.java) ?: emptyList()
+        val hasAccess = "SLO.Read" in roles
+        logger.debug("App-only read access {} - roles: {}", if (hasAccess) "granted" else "denied", roles)
+        return hasAccess
+    }
+
     override suspend fun getGroupsOrEmptyList(call: ApplicationCall, filter: String?): List<MicrosoftGraphGroup> {
         val jwtToken =
             call.request.headers["Authorization"]?.removePrefix("Bearer ")
@@ -107,7 +127,7 @@ class AuthServiceImpl(
     override suspend fun hasContextAccess(
         call: ApplicationCall,
         contextId: String,
-    ): Boolean = try {
+    ): Boolean = hasAppReadAccess(call) || try {
         val hasWriteAccess = hasWriteContextAccess(call, contextId)
         val hasReadAccess = hasReadContextAccess(call, contextId)
 
