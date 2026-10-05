@@ -1,0 +1,83 @@
+# Eksperiment: henter et Entra-token som maskinbrukeren GHA-test via OIDC (uten
+# client secret) og kaller Regelrett med det. Krever en federated credential på
+# GHA-test for denne branchen, og variablene under satt på repoet.
+#
+# workflow_dispatch virker bare når fila ligger på default branch. Til da startes
+# den av en push som endrer fila, eller med «Re-run jobs» i GitHub.
+name: Eksperiment – OIDC mot Regelrett
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/app-only-auth]
+    paths: [.github/workflows/rr-oidc-test.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  call-rr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TENANT_ID: ${{ vars.RR_TEST_TENANT_ID }}
+      CLIENT_ID: ${{ vars.GHA_TEST_CLIENT_ID }}
+      RR_CLIENT_ID: ${{ vars.RR_TEST_CLIENT_ID }}
+      RR_URL: ${{ vars.RR_TEST_URL }}
+    steps:
+      - name: Hent token og kall Regelrett
+        run: |
+          set -euo pipefail
+
+          for v in TENANT_ID CLIENT_ID RR_CLIENT_ID RR_URL; do
+            [ -n "${!v}" ] || { echo "::error::Variabelen for $v er ikke satt på repoet."; exit 1; }
+          done
+
+          claims() {
+            python3 -c 'import sys, json, base64
+          p = sys.argv[1].split(".")[1]; p += "=" * (-len(p) % 4)
+          c = json.loads(base64.urlsafe_b64decode(p))
+          print(json.dumps({k: c.get(k) for k in sys.argv[2:]}))' "$@"
+          }
+
+          # 1. OIDC-token fra GitHub, med audience som Entra forventer.
+          gh_token=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r .value)
+          echo "::add-mask::$gh_token"
+          echo "GitHub-token: $(claims "$gh_token" iss sub aud)"
+
+          # 2. Bytt det inn i et Entra-token for RR (client credentials med client_assertion).
+          resp=$(curl -sS -X POST "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token" \
+            --data-urlencode "client_id=$CLIENT_ID" \
+            --data-urlencode "scope=api://$RR_CLIENT_ID/.default" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+            --data-urlencode "client_assertion=$gh_token")
+          rr_token=$(jq -r '.access_token // empty' <<<"$resp")
+          if [ -z "$rr_token" ]; then
+            echo "::error::Entra ga ikke token: $(jq -r '.error_description // .' <<<"$resp" | head -c 600)"
+            exit 1
+          fi
+          echo "::add-mask::$rr_token"
+          echo "Entra-token: $(claims "$rr_token" aud ver idtyp roles scp azp)"
+
+          # 3. Kall RR uten og med token.
+          without=$(curl -sS -o /dev/null -w '%{http_code}' "$RR_URL/api/contexts?teamId=oidc-test")
+          with=$(curl -sS -o body.json -w '%{http_code}' \
+            -H "Authorization: Bearer $rr_token" "$RR_URL/api/contexts?teamId=oidc-test")
+          echo "Uten token: $without (forventet 401)"
+          echo "Med token:  $with (forventet 200), body: $(head -c 300 body.json)"
+
+          {
+            echo "### OIDC mot Regelrett"
+            echo
+            echo "| Kall | Status | Forventet |"
+            echo "| --- | --- | --- |"
+            echo "| \`GET /api/contexts\` uten token | $without | 401 |"
+            echo "| \`GET /api/contexts\` med OIDC-token | $with | 200 |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$without" = 401 ] && [ "$with" = 200 ]
