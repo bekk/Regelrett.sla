@@ -71,7 +71,7 @@
 #   issuer: "https://token.actions.githubusercontent.com"
 #   jwks_url: "https://token.actions.githubusercontent.com/.well-known/jwks"
 #   audience: "api://regelrett-m2m-slo"
-#   expected_repository: "bekk/Regelrett.sla"
+#   expected_repository: "bekk/grafana-sla"
 #   expected_ref: null
 #
 # #################################### Database ##############################
