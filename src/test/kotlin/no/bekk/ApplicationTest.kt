@@ -39,7 +39,7 @@ class ApplicationTest {
             issuer = "https://token.actions.githubusercontent.com",
             jwksUrl = "https://token.actions.githubusercontent.com/.well-known/jwks",
             audience = "test-audience",
-            expectedRepository = "bekk/Regelrett.sla",
+            expectedRepository = "bekk/grafana-sla",
             expectedRef = null,
         ),
         raw = YamlConfig(Yaml.decodeYamlMapFromString("value: null")),
