@@ -47,8 +47,10 @@ class AuthServiceImpl(
     private val logger = LoggerFactory.getLogger(AuthServiceImpl::class.java)
 
     private fun ApplicationCall.isAppOnlyToken(): Boolean {
-        val scp = principal<JWTPrincipal>()?.payload?.getClaim("scp")?.asString()
-        return scp.isNullOrBlank()
+        val payload = principal<JWTPrincipal>()?.payload ?: return false
+        val idtyp = payload.getClaim("idtyp")?.asString()
+        val scp = payload.getClaim("scp")?.asString()
+        return idtyp == "app" && scp.isNullOrBlank()
     }
 
     override fun hasAppReadAccess(call: ApplicationCall): Boolean {
@@ -56,7 +58,8 @@ class AuthServiceImpl(
 
         val roles = call.principal<JWTPrincipal>()?.payload
             ?.getClaim("roles")?.asList(String::class.java) ?: emptyList()
-        val hasAccess = "SLO.Read" in roles
+        val role = oAuthConfig.appReadRole
+        val hasAccess = role.isNotBlank() && role in roles
         logger.debug("App-only read access {} - roles: {}", if (hasAccess) "granted" else "denied", roles)
         return hasAccess
     }

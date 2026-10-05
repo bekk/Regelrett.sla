@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AppOnlyAccessTest {
-    private val oAuthConfig = OAuthConfig("", "", "", "", "", "", "", "", "", "")
+    private val oAuthConfig = OAuthConfig("", "", "", "", "", "", "", "", "", "", appReadRole = "SLO.Read")
 
     private val readGrantRepository = object : ReadGrantRepository {
         override fun getReadGrantsByContext(contextId: String): List<DatabaseReadGrant> = emptyList()
@@ -60,21 +60,26 @@ class AppOnlyAccessTest {
         override suspend fun fetchCurrentUser(bearerToken: String) = MicrosoftGraphUser("test-id", "Test", null)
     }
 
-    private fun token(scp: String? = null, roles: List<String>? = null): String = JWT.create()
+    private fun token(
+        scp: String? = null,
+        roles: List<String>? = null,
+        idtyp: String? = if (scp == null) "app" else null,
+    ): String = JWT.create()
         .withAudience("test-audience")
         .withIssuer("test-issuer")
         .withClaim("oid", "test-id")
         .apply { if (scp != null) withClaim("scp", scp) }
         .apply { if (roles != null) withClaim("roles", roles) }
+        .apply { if (idtyp != null) withClaim("idtyp", idtyp) }
         .sign(Algorithm.HMAC256("test-secret"))
 
-    private fun ApplicationTestBuilder.setup(microsoftService: RecordingMicrosoftService) {
+    private fun ApplicationTestBuilder.setup(microsoftService: RecordingMicrosoftService, config: OAuthConfig = oAuthConfig) {
         application {
             testModule(
                 contextRepository = contextRepository,
                 answerRepository = answerRepository,
                 commentRepository = commentRepository,
-                authService = AuthServiceImpl(microsoftService, contextRepository, readGrantRepository, oAuthConfig),
+                authService = AuthServiceImpl(microsoftService, contextRepository, readGrantRepository, config),
             )
         }
     }
@@ -170,5 +175,29 @@ class AppOnlyAccessTest {
         }
 
         assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `app-only access is disabled when app_read_role is not configured`() = testApplication {
+        setup(RecordingMicrosoftService(groupIds = emptyList()), config = oAuthConfig.copy(appReadRole = ""))
+
+        val response = client.get("/api/contexts?teamId=any-team") {
+            header(HttpHeaders.Authorization, "Bearer ${token(roles = listOf("SLO.Read"))}")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `token without idtyp app is not treated as app-only`() = testApplication {
+        val microsoftService = RecordingMicrosoftService(groupIds = emptyList())
+        setup(microsoftService)
+
+        val response = client.get("/api/contexts?teamId=any-team") {
+            header(HttpHeaders.Authorization, "Bearer ${token(roles = listOf("SLO.Read"), idtyp = null)}")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertTrue(microsoftService.oboCalled)
     }
 }
