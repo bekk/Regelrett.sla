@@ -83,6 +83,7 @@ fun Application.configureRouting(
             answerRouting(dependencies.authService, dependencies.answerRepository)
             commentRouting(dependencies.authService, dependencies.commentRepository)
             contextRouting(dependencies.authService, dependencies.answerRepository, dependencies.contextRepository, dependencies.commentRepository, dependencies.formService)
+            m2mSloRouting(dependencies.formService, dependencies.contextRepository, dependencies.answerRepository, config.githubActionsOidc)
             formRouting(dependencies.formService)
             readGrantRouting(dependencies.authService, dependencies.readGrantRepository)
             userInfoRouting(dependencies.authService)

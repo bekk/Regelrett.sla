@@ -12,6 +12,7 @@ import java.util.*
 interface ContextRepository {
     fun insertContext(context: DatabaseContextRequest): DatabaseContext
     fun getContextsByTeamId(teamId: String): List<DatabaseContext>
+    fun getContextsByFormId(formId: String): List<DatabaseContext>
     fun getContextByTeamIdAndFormId(teamId: String, formId: String): List<DatabaseContext>
     fun getContext(id: String): DatabaseContext
     fun deleteContext(id: String): Boolean
@@ -90,6 +91,39 @@ class ContextRepositoryImpl(private val database: Database) : ContextRepository 
         } catch (e: SQLException) {
             logger.error("Error fetching contexts for team: $teamId", e)
             throw RuntimeException("Error fetching contexts for team: $teamId from database", e)
+        }
+    }
+
+    override fun getContextsByFormId(formId: String): List<DatabaseContext> {
+        logger.debug("Fetching contexts for form: $formId")
+        val sqlStatement = "SELECT * FROM contexts WHERE form_id = ?"
+
+        return try {
+            database.getConnection().use { conn ->
+                conn.prepareStatement(sqlStatement).use { statement ->
+                    statement.setString(1, formId)
+
+                    val result = statement.executeQuery()
+
+                    buildList {
+                        while (result.next()) {
+                            add(
+                                DatabaseContext(
+                                    id = result.getString("id"),
+                                    teamId = result.getString("team_id"),
+                                    formId = result.getString("form_id"),
+                                    name = result.getString("name"),
+                                ),
+                            )
+                        }
+                    }.also {
+                        logger.debug("Successfully fetched contexts for form: $formId")
+                    }
+                }
+            }
+        } catch (e: SQLException) {
+            logger.error("Error fetching contexts for form: $formId", e)
+            throw RuntimeException("Error fetching contexts for form: $formId from database", e)
         }
     }
 

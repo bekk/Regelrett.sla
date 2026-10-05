@@ -12,6 +12,7 @@ data class Config(
     val database: DatabaseConfig,
     val answerHistoryCleanup: AnswerHistoryCleanupConfig,
     val frontendDevServer: FrontendDevServerConfig,
+    val githubActionsOidc: GithubActionsOidcConfig,
     val raw: YamlConfig,
 )
 
@@ -54,6 +55,14 @@ data class OAuthConfig(
 fun getIssuer(oAuthConfig: OAuthConfig) = oAuthConfig.baseUrl + "/" + oAuthConfig.tenantId + oAuthConfig.issuerPath
 fun getTokenUrl(oAuthConfig: OAuthConfig) = oAuthConfig.baseUrl + "/" + oAuthConfig.tenantId + oAuthConfig.tokenPath
 fun getJwksUrl(oAuthConfig: OAuthConfig) = oAuthConfig.baseUrl + "/" + oAuthConfig.tenantId + oAuthConfig.jwksPath
+
+data class GithubActionsOidcConfig(
+    val issuer: String,
+    val jwksUrl: String,
+    val audience: String,
+    val expectedRepository: String,
+    val expectedRef: String?,
+)
 
 data class ServerConfig(
     val protocol: String,

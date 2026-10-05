@@ -35,6 +35,13 @@ class ApplicationTest {
         database = DatabaseConfig("", "", "", "", ""),
         answerHistoryCleanup = AnswerHistoryCleanupConfig(""),
         frontendDevServer = FrontendDevServerConfig("", 0, "", ""),
+        githubActionsOidc = GithubActionsOidcConfig(
+            issuer = "https://token.actions.githubusercontent.com",
+            jwksUrl = "https://token.actions.githubusercontent.com/.well-known/jwks",
+            audience = "test-audience",
+            expectedRepository = "bekk/Regelrett.sla",
+            expectedRef = null,
+        ),
         raw = YamlConfig(Yaml.decodeYamlMapFromString("value: null")),
     )
     private val mockDatabase = object : Database {
