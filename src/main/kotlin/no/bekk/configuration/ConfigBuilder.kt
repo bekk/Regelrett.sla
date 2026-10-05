@@ -29,6 +29,7 @@ class ConfigBuilder {
     private lateinit var databaseConfig: DatabaseConfig
     private lateinit var answerHistoryConfig: AnswerHistoryCleanupConfig
     private lateinit var frontendDevServerConfig: FrontendDevServerConfig
+    private lateinit var githubActionsOidcConfig: GithubActionsOidcConfig
 
     fun setHomePath(args: CommandLineArgs): ConfigBuilder {
         if (args.homePath != "") {
@@ -259,6 +260,14 @@ class ConfigBuilder {
         }
     }
 
+    fun buildGithubActionsOidcConfig(yaml: YamlConfig): GithubActionsOidcConfig = GithubActionsOidcConfig(
+        issuer = yaml.getStringOrNull("github_actions_oidc", "issuer") ?: "https://token.actions.githubusercontent.com",
+        jwksUrl = yaml.getStringOrNull("github_actions_oidc", "jwks_url") ?: "https://token.actions.githubusercontent.com/.well-known/jwks",
+        audience = yaml.getString("github_actions_oidc", "audience"),
+        expectedRepository = yaml.getString("github_actions_oidc", "expected_repository"),
+        expectedRef = yaml.getStringOrNull("github_actions_oidc", "expected_ref"),
+    )
+
     fun builFrontendDevServerConfig(yaml: YamlConfig): FrontendDevServerConfig {
         val protocol = yaml.getStringOrNull("frontend_dev_server", "protocol") ?: "http"
         val host = yaml.getStringOrNull("frontend_dev_server", "host") ?: "localhost"
@@ -280,6 +289,7 @@ class ConfigBuilder {
         databaseConfig = buildDatabaseConfig(configYaml)
         answerHistoryConfig = buildAnswerHistoryConfig(configYaml)
         frontendDevServerConfig = builFrontendDevServerConfig(configYaml)
+        githubActionsOidcConfig = buildGithubActionsOidcConfig(configYaml)
 
         return Config(
             homePath = homePath,
@@ -291,6 +301,7 @@ class ConfigBuilder {
             database = databaseConfig,
             answerHistoryCleanup = answerHistoryConfig,
             frontendDevServer = frontendDevServerConfig,
+            githubActionsOidc = githubActionsOidcConfig,
             raw = configYaml,
         )
     }

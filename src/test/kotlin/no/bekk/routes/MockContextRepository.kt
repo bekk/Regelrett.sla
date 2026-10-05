@@ -18,6 +18,10 @@ interface MockContextRepository : ContextRepository {
         TODO("Not yet implemented")
     }
 
+    override fun getContextsByFormId(formId: String): List<DatabaseContext> {
+        TODO("Not yet implemented")
+    }
+
     override fun getContextsByName(name: String): List<DatabaseContext> {
         TODO("Not yet implemented")
     }
