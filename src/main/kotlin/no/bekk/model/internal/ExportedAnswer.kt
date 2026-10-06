@@ -4,16 +4,17 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ExportedAnswer(
-    val teamId: String,
-    val formId: String,
-    val formName: String,
-    val contextId: String,
-    val contextName: String,
-    val recordId: String,
     val questionId: String,
+    val description: String,
     val answer: String?,
     val answerType: String,
     val answerUnit: String?,
-    val updated: String,
-    val actor: String,
+)
+
+@Serializable
+data class ExportedTeamFunction(
+    val teamId: String,
+    val formName: String,
+    val functionName: String,
+    val answers: List<ExportedAnswer>,
 )
