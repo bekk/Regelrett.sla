@@ -11,6 +11,7 @@ import no.bekk.database.AnswerRepository
 import no.bekk.database.ContextRepository
 import no.bekk.exception.AuthenticationException
 import no.bekk.model.internal.ExportedAnswer
+import no.bekk.model.internal.ExportedTeamFunction
 import no.bekk.plugins.ErrorHandlers
 import no.bekk.services.FormService
 import no.bekk.util.RequestContext.getRequestInfo
@@ -57,31 +58,31 @@ fun Route.m2mSloRouting(
 
                 logger.info("${call.getRequestInfo()} Received GET /m2m/slo")
 
-                val exportedAnswers = formService.getFormProviders()
+                val exportedData = formService.getFormProviders()
                     .filter { it.name in EXPORTABLE_FORM_NAMES }
                     .flatMap { provider ->
-                        contextRepository.getContextsByFormId(provider.id).flatMap { context ->
-                            answerRepository.getLatestAnswersByContextIdFromDatabase(context.id).map { answer ->
+                        val descriptionsByQuestionId = provider.getForm().records.associateBy { it.recordId }
+                        contextRepository.getContextsByFormId(provider.id).map { context ->
+                            val answers = answerRepository.getLatestAnswersByContextIdFromDatabase(context.id).map { answer ->
                                 ExportedAnswer(
-                                    teamId = context.teamId,
-                                    formId = provider.id,
-                                    formName = provider.name,
-                                    contextId = context.id,
-                                    contextName = context.name,
-                                    recordId = answer.recordId,
                                     questionId = answer.questionId,
+                                    description = descriptionsByQuestionId[answer.questionId]?.description ?: "",
                                     answer = answer.answer,
                                     answerType = answer.answerType,
                                     answerUnit = answer.answerUnit,
-                                    updated = answer.updated,
-                                    actor = answer.actor,
                                 )
                             }
+                            ExportedTeamFunction(
+                                teamId = context.teamId,
+                                formName = provider.name,
+                                functionName = context.name,
+                                answers = answers,
+                            )
                         }
                     }
 
-                logger.info("${call.getRequestInfo()} Returning ${exportedAnswers.size} exported answers")
-                call.respond(HttpStatusCode.OK, exportedAnswers)
+                logger.info("${call.getRequestInfo()} Returning ${exportedData.size} team/function exports")
+                call.respond(HttpStatusCode.OK, exportedData)
             } catch (e: Exception) {
                 logger.error("${call.getRequestInfo()} Unexpected error in GET /m2m/slo", e)
                 ErrorHandlers.handleGenericException(call, e)
