@@ -61,7 +61,7 @@ fun Route.m2mSloRouting(
                 val exportedData = formService.getFormProviders()
                     .filter { it.name in EXPORTABLE_FORM_NAMES }
                     .flatMap { provider ->
-                        val descriptionsByQuestionId = provider.getForm().records.associateBy { it.recordId }
+                        val descriptionsByQuestionId = provider.getForm().records.associateBy { it.id }
                         contextRepository.getContextsByFormId(provider.id).map { context ->
                             val answers = answerRepository.getLatestAnswersByContextIdFromDatabase(context.id).map { answer ->
                                 ExportedAnswer(
