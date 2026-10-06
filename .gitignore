@@ -59,6 +59,3 @@ postgres.env
 oauth-secrets.env
 k8s/secrets/*.env
 !k8s/secrets/*.env.example
-
-## act (lokal kjøring av GitHub Actions)
-.secrets
