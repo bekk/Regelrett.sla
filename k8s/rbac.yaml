@@ -4,6 +4,10 @@ metadata:
   name: role-regelrett-caller-proxy
   namespace: ns-regelrett
 rules:
+  # Leser via GKE sin API-server-proxy (kubectl get --raw .../proxy/...), ikke
+  # kubectl port-forward (se rbac-portforward.yaml for den tilgangsveien).
+  # Scopet til den ene Servicen med resourceNames, siden navnet er stabilt
+  # på tvers av rollouts.
   - apiGroups: [""]
     resources: ["services/proxy"]
     resourceNames: ["service-regelrett"]

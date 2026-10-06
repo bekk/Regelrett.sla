@@ -1,0 +1,145 @@
+# REFERANSESKISSE - den faktiske kallende workflowen hører hjemme i
+# bekk/grafana-sla, ikke i dette repoet. Denne filen viser formen den bør
+# ta, slik at steget her over mot /api/m2m/slo stemmer med hva backend
+# faktisk forventer - se research/m2m/.
+#
+# Henter kontekst/svar på tvers av team via /api/m2m/slo. Kjører kun på
+# workflow_dispatch - se research/m2m/ for hvorfor og hvordan dette er
+# designet for å være strengt eksklusivt for akkurat denne workflowen.
+#
+# Tre uavhengige tillitskjeder må alle passere, og ingen av dem bruker en
+# hemmelighet som kan lekkes eller gjenbrukes:
+#   Vegg 1 (nettverkstilgang): en EGEN GCP Workload Identity Federation for
+#     bekk/grafana-sla sin workflow (IKKE deploy-main.yml sin, som bare
+#     tillitsgir dette repoets egne workflows) - beviser ingenting om HVEM
+#     som kaller. bekk/grafana-sla har allerede en bekreftet fungerende
+#     løsning for dette (research/steps/01-auth-gcp/ i det repoet, via
+#     GKE api-server-proxy) - se skrittet under for detaljer/forbehold.
+#   Vegg 2 (autorisasjon i appen): en egen, dedikert Entra ID
+#     app-registrering uten klienthemmelighet - kun en federated credential
+#     bundet til nøyaktig bekk/grafana-sla sin workflow/gren. Se
+#     research/m2m/setup.md.
+#   Vegg 3 (direkte GitHub OIDC-verifisering): backend verifiserer i
+#     tillegg GitHub sitt eget OIDC-token direkte mot token.actions.
+#     githubusercontent.com, og sjekker at "repository"-claimet er
+#     nøyaktig bekk/grafana-sla.
+name: M2M - Eksporter SLO-svar (alle team)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  export:
+    name: export
+    runs-on: ubuntu-latest
+    environment: gcp-regelrett-poc
+    steps:
+      - name: Sjekk ut kode
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Les konfigurasjon
+        id: cfg
+        run: |
+          set -euo pipefail
+          {
+            echo "region=$(yq -r '.gcp.region' gcp-config.yaml)"
+            echo "cluster=$(yq -r '.gcp.cluster' gcp-config.yaml)"
+            echo "namespace=$(yq -r '.kubernetes.namespace' gcp-config.yaml)"
+            echo "podlabel=$(yq -r '.app' gcp-config.yaml)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Vegg 1: nettverkstilgang. Egen WIF-tillit for bekk/grafana-sla sin
+      # workflow - IKKE en gjenbruk av deploy-main.yml sin. Vurder å bruke
+      # bekk/grafana-sla sin allerede bekrefte-fungerende GKE
+      # api-server-proxy-mekanisme (research/steps/01-auth-gcp/ i det
+      # repoet) i stedet for kubectl exec under, siden den allerede er
+      # verifisert ende-til-ende.
+      - name: Autentiser mot GCP
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Sett opp gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: gke-gcloud-auth-plugin
+
+      - name: Sett opp kubectl
+        uses: azure/setup-kubectl@v5
+        with:
+          version: v1.36.1
+
+      - name: Hent kubectl-kontekst
+        run: |
+          gcloud container clusters get-credentials '${{ steps.cfg.outputs.cluster }}' \
+            --region '${{ steps.cfg.outputs.region }}' \
+            --project '${{ vars.GCP_PROJECT_ID }}'
+
+      # Vegg 2: autorisasjon i appen. azure/login med client-id/tenant-id og
+      # ingen secret bruker GitHub sin OIDC-token + Entra sin federated
+      # credential til å logge inn som den dedikerte CI-appen - det finnes
+      # ikke noe passord noen kunne lekket eller gjenbrukt.
+      - name: Logg inn i Entra ID
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.EXPORT_JOB_CLIENT_ID }}
+          tenant-id: ${{ vars.EXPORT_JOB_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Hent Entra-token
+        id: token
+        run: |
+          set -euo pipefail
+          token=$(az account get-access-token \
+            --resource "api://${{ vars.REGELRETT_CLIENT_ID }}" \
+            --query accessToken -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      # Vegg 3: direkte GitHub OIDC-verifisering. Backend validerer dette
+      # tokenet selv, uavhengig av Entra-tokenet over - "audience" her må
+      # matche github_actions_oidc.audience i backend-konfigurasjonen.
+      - name: Hent GitHub OIDC-token
+        id: gh_oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('api://regelrett-m2m-slo')
+            core.setSecret(token)
+            core.setOutput('token', token)
+
+      # Trafikken går gjennom poden sitt eget loopback (kubectl exec), ikke
+      # over nettverket - NetworkPolicy-en er derfor uberørt av dette.
+      - name: Hent svar
+        id: export
+        run: |
+          set -euo pipefail
+          pod=$(kubectl -n '${{ steps.cfg.outputs.namespace }}' get pod \
+            -l 'app.kubernetes.io/name=${{ steps.cfg.outputs.podlabel }}' \
+            -o jsonpath='{.items[0].metadata.name}')
+          response=$(kubectl -n '${{ steps.cfg.outputs.namespace }}' exec "$pod" -- \
+            curl -sf http://localhost:8080/api/m2m/slo \
+              -H "Authorization: Bearer ${{ steps.token.outputs.token }}" \
+              -H "X-GitHub-OIDC-Token: ${{ steps.gh_oidc.outputs.token }}")
+          echo "$response" | jq .
+          echo "count=$(echo "$response" | jq 'length')" >> "$GITHUB_OUTPUT"
+
+      - name: Oppsummering
+        if: always()
+        run: |
+          {
+            echo "### M2M SLO-eksport"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Antall svar | ${{ steps.export.outputs.count }} |"
+            echo "| Commit | ${GITHUB_SHA} |"
+          } >> "$GITHUB_STEP_SUMMARY"

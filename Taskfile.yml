@@ -1,0 +1,33 @@
+version: '3'
+
+vars:
+  cluster:
+    sh: yq -r '.gcp.cluster' gcp-config.yaml
+  region:
+    sh: yq -r '.gcp.region' gcp-config.yaml
+  project_id:
+    sh: yq -r '.gcp.project_id' gcp-config.yaml
+
+tasks:
+  default:
+    desc: Vis tilgjengelige oppgaver
+    silent: true
+    cmds:
+      - task --list
+
+  credentials:
+    desc: Hent kubectl-kontekst for klyngen
+    cmds:
+      - gcloud container clusters get-credentials {{.cluster}} --region {{.region}} --project {{.project_id}}
+
+  rbac:apply:
+    desc: Legg til RBAC for kubectl port-forward (sa-github-regelrett-caller) - se k8s/rbac-portforward.yaml
+    deps: [credentials]
+    cmds:
+      - kubectl apply -f k8s/rbac-portforward.yaml
+
+  rbac:remove:
+    desc: Fjern RBAC for kubectl port-forward igjen
+    deps: [credentials]
+    cmds:
+      - kubectl delete -f k8s/rbac-portforward.yaml

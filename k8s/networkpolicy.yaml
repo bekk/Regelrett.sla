@@ -35,6 +35,9 @@ spec:
         - protocol: TCP
           port: 8080
 ---
+# Kreves for services/proxy-tilgangen i rbac.yaml: trafikken fra API-serveren går via
+# konnectivity-agent i kube-system. kubectl port-forward (rbac-portforward.yaml) går
+# gjennom podens eget loopback og trenger ingen tilsvarende regel.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

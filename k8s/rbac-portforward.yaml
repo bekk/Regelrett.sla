@@ -1,0 +1,34 @@
+# Egen fil, egen Role/RoleBinding fra rbac.yaml: denne gir kubectl port-forward-tilgang,
+# en annen tilgangsvei enn services/proxy i rbac.yaml. port-forward tunnelerer direkte til
+# poden via API-serveren og trenger derfor ingen NetworkPolicy-regel, i motsetning til
+# proxy-veien (se netpol-allow-apiserver-proxy-to-regelrett i networkpolicy.yaml).
+# Tenkt brukt ad-hoc (task rbac:apply/rbac:remove), ikke som en permanent tilgang.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: role-regelrett-caller-portforward
+  namespace: ns-regelrett
+rules:
+  # Ingen resourceNames: podnavnet endrer seg ved hver rollout, og
+  # resourceNames kan uansett ikke begrense "list". get/list er nødvendig
+  # for å slå opp gjeldende podnavn via label-selector før port-forward.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rolebinding-regelrett-caller-portforward
+  namespace: ns-regelrett
+subjects:
+  - kind: User
+    name: sa-github-regelrett-caller@gcp-fleks-grafanaslo.iam.gserviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: role-regelrett-caller-portforward
+  apiGroup: rbac.authorization.k8s.io
