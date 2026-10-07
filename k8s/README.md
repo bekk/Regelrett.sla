@@ -16,7 +16,9 @@ som er gitignorert — se [Secrets](#secrets) under.
 | `configmap.yaml` | ConfigMap `config-regelrett` | `ns-regelrett` |
 | `deployment.yaml` | Deployment `deployment-regelrett` | `ns-regelrett` |
 | `service.yaml` | Service `service-regelrett` | `ns-regelrett` |
-| `networkpolicy.yaml` | NetworkPolicy default-deny + allow fra Backstage | `ns-regelrett` |
+| `networkpolicy.yaml` | NetworkPolicy default-deny + allow fra Backstage + allow fra apiserver-proxy | `ns-regelrett` |
+| `rbac.yaml` | Role + RoleBinding, `services/proxy`-tilgang for CI-identiteten | `ns-regelrett` |
+| `rbac-portforward.yaml` | Role + RoleBinding, `kubectl port-forward`-tilgang for CI-identiteten | `ns-regelrett` |
 | `db/namespace.yaml` | Namespace `ns-regelrett-db` | – |
 | `db/configmap-initdb.yaml` | ConfigMap `config-postgres-initdb` | `ns-regelrett-db` |
 | `db/postgres.yaml` | Service + StatefulSet | `ns-regelrett-db` |
@@ -201,13 +203,30 @@ ALTER ROLE regelrett WITH PASSWORD 'nytt-passord';
 
 Skjemaendringer kjøres av Flyway ved oppstart, fra `src/main/resources/db/migration`.
 
+## RBAC
+
+Samme CI-identitet, `sa-github-regelrett-caller@gcp-fleks-grafanaslo.iam.gserviceaccount.com`,
+har to separate Role/RoleBinding-par i `ns-regelrett` for to ulike tilgangsveier:
+
+- `rbac.yaml` gir `get` på `services/proxy`, scopet til `service-regelrett` — leser appen via
+  GKE sin API-server-proxy. Dette er en permanent tilgang, og krever i tillegg
+  `netpol-allow-apiserver-proxy-to-regelrett` i `networkpolicy.yaml`, siden trafikken kommer
+  inn via `konnectivity-agent` i `kube-system`.
+- `rbac-portforward.yaml` gir `get`/`list` på `pods` og `create` på `pods/portforward` — brukes
+  til `kubectl port-forward` ved feilsøking. Denne er ment slått av/på ad-hoc med
+  `task rbac:apply`/`task rbac:remove`, og trenger **ingen** NetworkPolicy-endring: trafikken
+  går gjennom podens eget loopback, ikke over nettverket.
+
 ## NetworkPolicy
 
-`networkpolicy.yaml` inneholder to policyer i `ns-regelrett`: default-deny på all ingress,
+`networkpolicy.yaml` inneholder tre policyer i `ns-regelrett`: default-deny på all ingress,
 pluss `netpol-allow-backstage-to-regelrett` som slipper inn Backstage-poddene
 (`app.kubernetes.io/name: backstage` i `ns-backstage`) på appens **pod-port**, 8080 — ikke
 Service-porten 80. Trafikk NAT'es til pod-porten før NetworkPolicy evalueres, så en regel
 som peker på port 80 ser riktig ut, men matcher ingenting.
+
+Den tredje, `netpol-allow-apiserver-proxy-to-regelrett`, slipper inn `konnectivity-agent`
+fra `kube-system` — se [RBAC](#rbac) over for hvorfor.
 
 Regelen matcher på podLabelen `app.kubernetes.io/name: spire-regelrett`, samme fallgruve som
 beskrevet under [Kjent svakhet](#kjent-svakhet) for databasens NetworkPolicy: endres labelen

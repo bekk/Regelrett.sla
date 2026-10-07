@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: role-regelrett-caller-proxy
+  namespace: ns-regelrett
+rules:
+  # Leser via GKE sin API-server-proxy (kubectl get --raw .../proxy/...), ikke
+  # kubectl port-forward (se rbac-portforward.yaml for den tilgangsveien).
+  # Scopet til den ene Servicen med resourceNames, siden navnet er stabilt
+  # på tvers av rollouts.
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames: ["service-regelrett"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rolebinding-regelrett-caller-proxy
+  namespace: ns-regelrett
+subjects:
+  - kind: User
+    name: sa-github-regelrett-caller@gcp-fleks-grafanaslo.iam.gserviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: role-regelrett-caller-proxy
+  apiGroup: rbac.authorization.k8s.io
