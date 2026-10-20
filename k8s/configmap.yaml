@@ -11,10 +11,9 @@ data:
   RR_BASE_MODE: "production"
 
   # Bestemmer redirect-URI-en mot Entra («${root_url}/callback»).
-  # Denne verdien passer til kubectl port-forward.
-  RR_SERVER_ROOT_URL: "http://localhost:8080"
-  RR_SERVER_DOMAIN: "localhost"
-  RR_SERVER_ALLOWED_ORIGINS: "localhost:8080,localhost:5173"
+  RR_SERVER_ROOT_URL: "https://regelrett.slo.fleks.dev"
+  # Fjerner localhost-originene fra defaults.yaml. Egen adresse er alltid tillatt.
+  RR_SERVER_ALLOWED_ORIGINS: "regelrett.slo.fleks.dev"
 
   # Headless Service i databasens namespace. Uten denne brukes
   # defaults.yaml sin 127.0.0.1:5433. Bruker og passord: secret-regelrett-db.
