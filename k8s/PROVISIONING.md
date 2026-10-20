@@ -1,7 +1,5 @@
 # Skjemakilder (schemasources) i Kubernetes
 
-
-
 ### 1. Fyll inn en ekte schemasource-fil lokalt
 
 ```bash
@@ -49,13 +47,12 @@ monteres uavhengig av dette.
 
 ### 4. Rull ut endringen
 
+Merge til `main`, så deployer CI. Følg utrullingen med:
+
 ```bash
-kubectl apply -f k8s/deployment.yaml
 kubectl rollout status deployment/deployment-regelrett -n ns-regelrett --timeout=5m
 ```
 
 ### 5. Verifiser
 
-```bash
-kubectl port-forward -n ns-regelrett service/service-regelrett 8080:80
-```
+Åpne <https://regelrett.slo.fleks.dev>.

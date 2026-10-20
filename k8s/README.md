@@ -1,12 +1,8 @@
 # Regelrett i Kubernetes
 
-Rene manifester, applyet med `kubectl apply -f`. Ingen kustomize, ingen Helm.
-
-**Merge til `main` deployer appen automatisk.** Kommandoene under er engangsoppsettet og
-feilsøkingsveien — se [.github/README.md](../.github/README.md) for CI-flyten.
-
-Alt utenom Secrets ligger som YAML her. Secrets lages med `kubectl` fra env-filer
-som er gitignorert — se [Secrets](#secrets) under.
+Regelrett ligger på <https://regelrett.slo.fleks.dev>. Manifestene er rene YAML-filer, uten
+kustomize eller Helm. **Merge til `main` deployer appen**, se [.github/README.md](../.github/README.md).
+Kommandoene under er engangsoppsett og feilsøking.
 
 ## Oversikt
 
@@ -16,70 +12,49 @@ som er gitignorert — se [Secrets](#secrets) under.
 | `configmap.yaml` | ConfigMap `config-regelrett` | `ns-regelrett` |
 | `deployment.yaml` | Deployment `deployment-regelrett` | `ns-regelrett` |
 | `service.yaml` | Service `service-regelrett` | `ns-regelrett` |
-| `networkpolicy.yaml` | NetworkPolicy default-deny + allow fra Backstage + allow fra apiserver-proxy | `ns-regelrett` |
-| `rbac.yaml` | Role + RoleBinding, `services/proxy`-tilgang for CI-identiteten | `ns-regelrett` |
-| `rbac-portforward.yaml` | Role + RoleBinding, `kubectl port-forward`-tilgang for CI-identiteten | `ns-regelrett` |
+| `httproute.yaml` | HTTPRoute `regelrett.slo.fleks.dev` + HealthCheckPolicy | `ns-regelrett` |
+| `networkpolicy.yaml` | NetworkPolicy default-deny + allow fra Backstage og lastbalanseren | `ns-regelrett` |
 | `db/namespace.yaml` | Namespace `ns-regelrett-db` | – |
 | `db/configmap-initdb.yaml` | ConfigMap `config-postgres-initdb` | `ns-regelrett-db` |
 | `db/postgres.yaml` | Service + StatefulSet | `ns-regelrett-db` |
 | `db/networkpolicy.yaml` | NetworkPolicy default-deny + allow fra appen | `ns-regelrett-db` |
 
-Databasen bor i et eget namespace. Rives appen — `kubectl delete namespacens-regelrett` er den korteste veien — følger ikke dataene med.
+`httproute.yaml` kobler appen på den delte Gatewayen i kartverket.dev.sla (`k8s/gateway/`).
+Appregistreringen i Entra ID må ha redirect-URI-en `https://regelrett.slo.fleks.dev/callback`.
+
+Databasen har eget namespace, så dataene overlever at `ns-regelrett` slettes.
 
 ## Secrets
 
-Tre Secrets må finnes før poddene starter. Uten dem blir de stående i `CreateContainerConfigError`.
-
-Databasen og appen har hver sin Secret: databasen trenger superbrukerpassordet, appen
-trenger bare sin egen innlogging.
+Tre Secrets må finnes før poddene starter, ellers står de i `CreateContainerConfigError`.
 
 | Secret | Namespace | Nøkler | Lest av |
 | --- | --- | --- | --- |
 | `secret-regelrett-postgres` | `ns-regelrett-db` | `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | postgres-imaget og init-SQL-en |
-| `secret-regelrett-db` | `ns-regelrett` | `RR_DATABASE_USER`, `RR_DATABASE_PASSWORD` | appen, via `envFrom` |
-| `secret-regelrett-oauth` | `ns-regelrett` | `RR_OAUTH_*`, `RR_AIRTABLE_ACCESS_TOKEN` | appen, via `envFrom` |
+| `secret-regelrett-db` | `ns-regelrett` | `RR_DATABASE_USER`, `RR_DATABASE_PASSWORD` | appen |
+| `secret-regelrett-oauth` | `ns-regelrett` | `RR_OAUTH_*`, `RR_AIRTABLE_ACCESS_TOKEN` | appen |
 
-### Fyll inn env-filene
+Fyll inn de gitignorerte env-filene. De er to, fordi `--from-env-file` tar med alle nøklene i
+filen, og OAuth-hemmelighetene ikke skal havne i databasens namespace.
 
 ```bash
 cp k8s/secrets/postgres.env.example k8s/secrets/postgres.env
 cp k8s/secrets/oauth.env.example k8s/secrets/oauth.env
+openssl rand -hex 24   # passord som ikke trenger siteres
 ```
 
-Begge `.env`-filene er gitignorert. Generer passord som ikke trenger siteres noe sted:
-
-```bash
-openssl rand -hex 24
-```
-
-To filer og ikke én, fordi `--from-env-file` tar *alle* nøklene i fila. Med én felles fil
-ville OAuth-hemmelighetene havnet i databasens namespace også.
-
-### Lag Secretene
-
-Namespacene må finnes først — se [Deploy](#deploy).
+Lag Secretene når namespacene finnes (se [Deploy](#deploy)). `secret-regelrett-db` leser
+passordet fra `postgres.env`, så de to ikke kan gå i utakt. Brukeren er `regelrett` fordi
+init-SQL-en hardkoder rollenavnet.
 
 ```bash
 kubectl create secret generic secret-regelrett-postgres -n ns-regelrett-db --from-env-file=k8s/secrets/postgres.env --dry-run=client -o yaml | kubectl apply -f -
-```
-
-Appens side henter passordet fra **samme fil**, så de to ikke kan gå i utakt.
-`RR_DATABASE_USER` er `regelrett` fordi init-SQL-en hardkoder rollenavnet:
-
-```bash
 set -a && . ./k8s/secrets/postgres.env && set +a && kubectl create secret generic secret-regelrett-db -n ns-regelrett --from-literal=RR_DATABASE_USER=regelrett --from-literal=RR_DATABASE_PASSWORD="$APP_DB_PASSWORD" --dry-run=client -o yaml | kubectl apply -f -
-```
-
-```bash
 kubectl create secret generic secret-regelrett-oauth -n ns-regelrett --from-env-file=k8s/secrets/oauth.env --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-`--dry-run=client -o yaml | kubectl apply -f -` i stedet for `kubectl create secret` alene:
-da feiler ikke kommandoen med `AlreadyExists` når den kjøres på nytt, og verdiene
-oppdateres i stedet.
-
-En pod leser `envFrom` **én gang, ved oppstart**, og merker ingenting til at Secreten bak
-er endret. Etter en endring:
+`--dry-run=client -o yaml | kubectl apply -f -` gjør kommandoene trygge å kjøre på nytt.
+Poddene leser Secretene bare ved oppstart, så restart etter en endring:
 
 ```bash
 kubectl rollout restart deployment/deployment-regelrett -n ns-regelrett
@@ -87,22 +62,17 @@ kubectl rollout restart deployment/deployment-regelrett -n ns-regelrett
 
 ## Deploy
 
-Rekkefølgen betyr noe: namespacene må finnes før Secretene, og både Secreten og
-initdb-ConfigMapen før StatefulSetet kan starte.
+Namespacene må finnes før Secretene, og Secreten og initdb-ConfigMapen før databasen starter.
 
 ```bash
 kubectl apply -f k8s/namespace.yaml -f k8s/db/namespace.yaml
-```
-
-Deretter de tre Secret-kommandoene over. Så databasen:
-
-```bash
+# lag Secretene over
 kubectl apply -f k8s/db/configmap-initdb.yaml -f k8s/db/postgres.yaml -f k8s/db/networkpolicy.yaml
 kubectl rollout status statefulset/statefulset-regelrett-postgres -n ns-regelrett-db --timeout=5m
 ```
 
-Så appen. Normalt gjør GitHub Actions dette ved merge til `main` — se
-[.github/README.md](../.github/README.md). For hånd, med plassholderen byttet ut:
+Appen deployes av CI. `deployment.yaml` har plassholderen `replaced-at-deploy` i stedet for en
+tag, så en bar `kubectl apply -f k8s/deployment.yaml` feiler med vilje. For hånd:
 
 ```bash
 IMG=europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett:<tag>
@@ -111,78 +81,30 @@ awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/*.yaml \
   | kubectl apply -f -
 ```
 
-Deployer du slik mens CI er i bruk, blir det du la ut overskrevet av neste merge.
+Neste merge til `main` overskriver det du deployet for hånd.
 
 ### Image
 
-Image-en ligger i Artifact Registry i `gcp-fleks-grafanaslo`:
-
-```
-europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett
-```
-
-**Image-referansen må være fullt kvalifisert.** Et bart navn som
-`spire-regelrett:<tag>` tolkes av Kubernetes som `docker.io/library/spire-regelrett:<tag>`,
-og podden går i `ErrImagePull`/`ImagePullBackOff` med `not found` — selv om tagen finnes i
-Artifact Registry. Registry-host, prosjekt og repo må stå i referansen:
-
-```bash
-kubectl set image deployment/deployment-regelrett spire-regelrett=europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett:<tag> -n ns-regelrett
-```
-
-Tilgjengelige tagger:
+Imaget må refereres med full sti. Et bart `spire-regelrett:<tag>` tolkes som Docker Hub og
+gir `ImagePullBackOff`.
 
 ```bash
 gcloud artifacts docker images list europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett --include-tags
 ```
 
-### Bygg image selv
-
-Nodene i klyngen er `amd64`. Bygger du på en Apple Silicon-Mac uten `--platform`, får du
-et `arm64`-image som pulles helt fint, men krasjer i `CrashLoopBackOff` med
-`exec /bin/sh: exec format error`. `JS_PLATFORM` i Dockerfilen pinner bare JS-steget —
-sluttimaget arver arkitekturen til maskinen som bygger.
+Bygger du selv, må det være for `linux/amd64`. Et `arm64`-image fra en Apple Silicon-Mac
+pulles fint, men krasjer med `exec format error`.
 
 ```bash
 gcloud auth configure-docker europe-north1-docker.pkg.dev
 IMG=europe-north1-docker.pkg.dev/gcp-fleks-grafanaslo/spire-grafana-slo/spire-regelrett:$(date +%Y%m%d-%H%M)-$(git rev-parse --short=7 HEAD)
 docker buildx build --platform linux/amd64 -t "$IMG" --push .
-```
-
-Sjekk arkitekturen til et image før du deployer det:
-
-```bash
 docker buildx imagetools inspect "$IMG" --format '{{.Image.Platform}}'
 ```
 
-`deployment.yaml` inneholder ikke en tag, men plassholderen `replaced-at-deploy`. Deployen
-bytter den ut med gjeldende image:
-
-```bash
-awk 'FNR==1 && NR>1 {print "---"} {print}' k8s/*.yaml \
-  | sed "s|replaced-at-deploy|$IMG|g" \
-  | kubectl apply -f -
-```
-
-Et bart `kubectl apply -f k8s/deployment.yaml` vil derfor feile på plassholderen. Det er
-med vilje: alternativet var at manifestet inneholdt en tag som stille ble eldre for hver
-deploy, og at en apply for hånd rullet klyngen tilbake uten at noen merket det.
-
-### Nå appen
-
-Det er ingen Ingress. `RR_SERVER_ROOT_URL` i `configmap.yaml` er satt til
-`http://localhost:8080`, som passer til:
-
-```bash
-kubectl port-forward -n ns-regelrett service/service-regelrett 8080:80
-```
-
-Skal Regelrett nås på et domene, må `root_url` endres **og** den nye redirect-URI-en
-(`${root_url}/callback`) registreres på appregistreringen i Entra ID.
-
 ## Database
 
-Volumet overlever at appen rives. Det er sletting av namespacet som fjerner det:
+Volumet slettes bare sammen med namespacet:
 
 ```bash
 kubectl delete namespace ns-regelrett-db
@@ -194,52 +116,32 @@ psql som superbruker:
 kubectl exec -it -n ns-regelrett-db statefulset-regelrett-postgres-0 -- psql -U postgres -d regelrett
 ```
 
-Init-SQL-en i `db/configmap-initdb.yaml` kjører **bare** første gang volumet
-initialiseres. Endres `APP_DB_PASSWORD` etter det, må endringen gjøres i databasen også:
+Init-SQL-en kjører bare første gang volumet initialiseres. Endres `APP_DB_PASSWORD` senere,
+må det også endres i databasen:
 
 ```sql
 ALTER ROLE regelrett WITH PASSWORD 'nytt-passord';
 ```
 
-Skjemaendringer kjøres av Flyway ved oppstart, fra `src/main/resources/db/migration`.
-
-## RBAC
-
-Samme CI-identitet, `sa-github-regelrett-caller@gcp-fleks-grafanaslo.iam.gserviceaccount.com`,
-har to separate Role/RoleBinding-par i `ns-regelrett` for to ulike tilgangsveier:
-
-- `rbac.yaml` gir `get` på `services/proxy`, scopet til `service-regelrett` — leser appen via
-  GKE sin API-server-proxy. Dette er en permanent tilgang, og krever i tillegg
-  `netpol-allow-apiserver-proxy-to-regelrett` i `networkpolicy.yaml`, siden trafikken kommer
-  inn via `konnectivity-agent` i `kube-system`.
-- `rbac-portforward.yaml` gir `get`/`list` på `pods` og `create` på `pods/portforward` — brukes
-  til `kubectl port-forward` ved feilsøking. Denne er ment slått av/på ad-hoc med
-  `task rbac:apply`/`task rbac:remove`, og trenger **ingen** NetworkPolicy-endring: trafikken
-  går gjennom podens eget loopback, ikke over nettverket.
+Flyway kjører skjemaendringer ved oppstart, fra `src/main/resources/db/migration`.
 
 ## NetworkPolicy
 
-`networkpolicy.yaml` inneholder tre policyer i `ns-regelrett`: default-deny på all ingress,
-pluss `netpol-allow-backstage-to-regelrett` som slipper inn Backstage-poddene
-(`app.kubernetes.io/name: backstage` i `ns-backstage`) på appens **pod-port**, 8080 — ikke
-Service-porten 80. Trafikk NAT'es til pod-porten før NetworkPolicy evalueres, så en regel
-som peker på port 80 ser riktig ut, men matcher ingenting.
+Begge namespacene avviser all innkommende trafikk, med disse unntakene:
 
-Den tredje, `netpol-allow-apiserver-proxy-to-regelrett`, slipper inn `konnectivity-agent`
-fra `kube-system` — se [RBAC](#rbac) over for hvorfor.
+- `ns-regelrett` slipper inn Backstage (`app.kubernetes.io/name: backstage` i `ns-backstage`)
+  og Googles lastbalanserer (`35.191.0.0/16`, `130.211.0.0/22`).
+- `ns-regelrett-db` slipper inn appen på port 5432.
 
-Regelen matcher på podLabelen `app.kubernetes.io/name: spire-regelrett`, samme fallgruve som
-beskrevet under [Kjent svakhet](#kjent-svakhet) for databasens NetworkPolicy: endres labelen
-i `deployment.yaml` uten at `networkpolicy.yaml` endres i samme slengen, blir
-Backstage-trafikken droppet av default-deny.
+Reglene i `ns-regelrett` bruker pod-porten 8080, ikke Service-porten 80. NetworkPolicy
+evalueres etter at trafikken er NAT'et til poden, så port 80 ville ikke matchet noe.
+
+Alle reglene matcher på podlabelen `app.kubernetes.io/name: spire-regelrett`. Endres den i
+`deployment.yaml`, må `networkpolicy.yaml` og `db/networkpolicy.yaml` endres samtidig. Ellers
+droppes trafikken, og det viser seg som timeout (`SocketTimeoutException` mot databasen), ikke
+«connection refused».
 
 ## Kjent svakhet
 
-`db/postgres.yaml` setter `POSTGRES_HOST_AUTH_METHOD: trust`, som slipper inn alle
-tilkoblinger uten passord. `db/networkpolicy.yaml` er det eneste som skjermer databasen:
-default-deny på ingress, pluss én regel som slipper inn app-poddene på port 5432.
-
-Den regelen matcher på podLabelen `app.kubernetes.io/name: spire-regelrett`. Endres labelen
-i `deployment.yaml` uten at `db/networkpolicy.yaml` endres i samme slengen, blir trafikken
-droppet av default-deny, og appen feiler med `SocketTimeoutException: Connect timed out`
-mot databasen — ikke «connection refused». De to filene må holdes i sync.
+`db/postgres.yaml` setter `POSTGRES_HOST_AUTH_METHOD: trust`, så databasen godtar tilkoblinger
+uten passord. `db/networkpolicy.yaml` er det eneste som skjermer den.
